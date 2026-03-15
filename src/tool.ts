@@ -2,6 +2,10 @@
 import { OpenAPIV3 } from 'openapi-types'
 import { Tool } from '@modelcontextprotocol/sdk/types.js'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import z from 'zod'
+
+type ToolDeclaration = Partial<Tool>
+
 
 export interface RouteDeclaration {
     method: string
@@ -19,7 +23,7 @@ function buildToolName(method: string, path: string): string {
 /**
  * Construit une déclaration de MCP Tool depuis une route OpenAPI.
  */
-export function buildMcpTool(route: RouteDeclaration): Tool {
+export function buildMcpTool(route: RouteDeclaration): ToolDeclaration {
     const { method, path, operation } = route
 
     const properties: Record<string, object> = {}
@@ -51,18 +55,18 @@ export function buildMcpTool(route: RouteDeclaration): Tool {
         name: buildToolName(method, path),
         title: operation.summary || operation.description,
         description: operation.description,
-        inputSchema: {
-            type: 'object',
-            properties: {
-                ...properties,
-                headers: {
-                    type: 'object',
-                    description: 'Optional HTTP headers to include in the request',
-                    additionalProperties: { type: 'string' },
-                },
-            },
-            ...(required.length > 0 ? { required } : {}),
-        },
+        // inputSchema: {
+        //     type: 'object',
+        //     properties: {
+        //         ...properties,
+        //         headers: {
+        //             type: 'object',
+        //             description: 'Optional HTTP headers to include in the request',
+        //             additionalProperties: { type: 'string' },
+        //         },
+        //     },
+        //     ...(required.length > 0 ? { required } : {}),
+        // },
     }
 }
 
@@ -100,20 +104,27 @@ async function confirmIfMutating(server: McpServer, route: RouteDeclaration): Pr
  */
 export function buildToolCallback(server: McpServer, baseUrl: string, route: RouteDeclaration, defaultArgs: Record<string, unknown> = {}) {
     return async (args: Record<string, unknown>) => {
-        const merged = { ...defaultArgs, ...args }
-        const { headers, ...rest } = merged
+        try {
+            const merged = { ...defaultArgs, ...args }
+            const { headers, ...rest } = merged
 
-        const mergedHeaders = {
-            ...(defaultArgs['headers'] as Record<string, string> | undefined),
-            ...(headers as Record<string, string> | undefined),
+            const mergedHeaders = {
+                ...(defaultArgs['headers'] as Record<string, string> | undefined),
+                ...(headers as Record<string, string> | undefined),
+            }
+
+            if (!await confirmIfMutating(server, route)) {
+                return { content: [{ type: 'text' as const, text: 'Action cancelled.' }] }
+            }
+
+            const result = await callRoute(baseUrl, route, rest, Object.keys(mergedHeaders).length ? mergedHeaders : undefined)
+            return { content: [{ type: 'text' as const, text: JSON.stringify(result.body) }] }
+        } catch (e) {
+            return {
+                isError: true,
+                content: [{ type: 'text' as const, text: JSON.stringify(e.message) }]
+            }
         }
-
-        if (!await confirmIfMutating(server, route)) {
-            return { content: [{ type: 'text' as const, text: 'Action cancelled.' }] }
-        }
-
-        const result = await callRoute(baseUrl, route, rest, Object.keys(mergedHeaders).length ? mergedHeaders : undefined)
-        return { content: [{ type: 'text' as const, text: JSON.stringify(result.body) }] }
     }
 }
 

@@ -20,7 +20,6 @@ async function main() {
         const tool = buildMcpTool(route)
         server.registerTool(tool.name, tool as any, buildToolCallback(server, baseUrl, route, defaultArgs))
     }
-
     const transport = new StdioServerTransport();
     await server.connect(transport);
     console.error(`OpenApi ${openApi.info.title} MCP Server running on stdio`);
