@@ -1,6 +1,11 @@
 {
   "name": "openapi-mcpify",
   "bin": "dist/index.js",
+  "version": "0.0.0",
+  "files": [
+    "dist",
+    "package.json"
+  ],
   "scripts": {
     "build": "npx tsc && chmod +x dist/index.js"
   },
